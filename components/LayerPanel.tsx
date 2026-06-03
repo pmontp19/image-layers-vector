@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import type { Layer } from "@/lib/types";
-import { downloadSvg, downloadPng, downloadAllSvgs } from "@/lib/zip";
+import { downloadSvg, downloadPng } from "@/lib/zip";
 
 function StatusBadge({ layer }: { layer: Layer }) {
   switch (layer.status) {
@@ -24,14 +25,19 @@ export function LayerPanel({
   layers,
   onToggle,
   onVectorizeOne,
+  onReorder,
+  onRecolor,
   busy,
 }: {
   layers: Layer[];
   onToggle: (id: string) => void;
   onVectorizeOne: (id: string) => void;
+  onReorder: (fromId: string, toId: string) => void;
+  onRecolor: (id: string, color: string) => void;
   busy: boolean;
 }) {
-  const anyVector = layers.some((l) => l.svgUrl);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
 
   if (layers.length === 0) {
     return (
@@ -45,24 +51,49 @@ export function LayerPanel({
 
   return (
     <div>
-      <div className="row between" style={{ marginBottom: 12 }}>
+      <div className="row between" style={{ marginBottom: 6 }}>
         <h2 style={{ margin: 0 }}>Layers ({layers.length})</h2>
-        <button
-          className="btn small"
-          disabled={busy}
-          onClick={() => downloadAllSvgs(layers)}
-          title="Download all layers as a ZIP (SVG + PNG)"
-        >
-          ⬇ ZIP
-        </button>
       </div>
+      <p className="hint" style={{ marginTop: 0, marginBottom: 12 }}>
+        Top of the stack first. Drag to reorder · pick a cut color per layer.
+      </p>
 
-      {/* render top layer first in the list (reverse of stack order) */}
+      {/* render top layer first (reverse of stack order) */}
       {[...layers].reverse().map((layer) => (
         <div
           key={layer.id}
-          className={`layer-item${layer.visible ? "" : " hidden-layer"}`}
+          draggable={!busy}
+          onDragStart={() => setDragId(layer.id)}
+          onDragEnd={() => {
+            setDragId(null);
+            setOverId(null);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (layer.id !== overId) setOverId(layer.id);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (dragId && dragId !== layer.id) onReorder(dragId, layer.id);
+            setDragId(null);
+            setOverId(null);
+          }}
+          className={
+            `layer-item${layer.visible ? "" : " hidden-layer"}` +
+            `${overId === layer.id && dragId && dragId !== layer.id ? " drop-target" : ""}` +
+            `${dragId === layer.id ? " dragging" : ""}`
+          }
         >
+          <span className="drag-handle" title="Drag to reorder">
+            ⠿
+          </span>
+          <label className="swatch" title="Cut color" style={{ background: layer.color }}>
+            <input
+              type="color"
+              value={layer.color}
+              onChange={(e) => onRecolor(layer.id, e.target.value)}
+            />
+          </label>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img className="lthumb" src={layer.rasterUrl} alt={layer.name} />
           <div className="lmeta">
@@ -84,7 +115,11 @@ export function LayerPanel({
                 {layer.visible ? "👁 Hide" : "🚫 Show"}
               </button>
               {layer.svgUrl ? (
-                <button className="btn small" onClick={() => downloadSvg(layer)}>
+                <button
+                  className="btn small"
+                  onClick={() => downloadSvg(layer)}
+                  title="Download this layer's raw SVG"
+                >
                   SVG
                 </button>
               ) : (
@@ -103,13 +138,6 @@ export function LayerPanel({
           </div>
         </div>
       ))}
-
-      {anyVector ? (
-        <p className="hint" style={{ marginTop: 10 }}>
-          Tip: import the SVGs directly into Cricut Design Space — each layer
-          becomes its own cut path.
-        </p>
-      ) : null}
     </div>
   );
 }

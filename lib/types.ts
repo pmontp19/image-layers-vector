@@ -21,12 +21,14 @@ export interface Layer {
   height: number;
   visible: boolean;
   status: LayerStatus;
+  /** Distinct cut color (used by the "color per layer" view and Cricut export). */
+  color: string;
   svgUrl?: string;
   svgText?: string;
   error?: string;
 }
 
-export type ViewMode = "raster" | "vector";
+export type ViewMode = "raster" | "vector" | "color";
 
 export type Stage =
   | "idle"

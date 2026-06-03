@@ -43,16 +43,33 @@ export function LayerCanvas({
     <div className="stage">
       {layers.map((layer) => {
         if (!layer.visible) return null;
-        const showVector = viewMode === "vector" && layer.svgText;
-        if (showVector) {
+
+        // Cricut-style preview: each layer as a flat solid-color silhouette,
+        // using the layer PNG's alpha as a CSS mask.
+        if (viewMode === "color") {
+          return (
+            <div
+              key={layer.id}
+              className="layer color-layer"
+              style={{
+                backgroundColor: layer.color,
+                WebkitMaskImage: `url("${layer.rasterUrl}")`,
+                maskImage: `url("${layer.rasterUrl}")`,
+              }}
+            />
+          );
+        }
+
+        if (viewMode === "vector" && layer.svgText) {
           return (
             <div
               key={layer.id}
               className="layer svg"
-              dangerouslySetInnerHTML={{ __html: layer.svgText! }}
+              dangerouslySetInnerHTML={{ __html: layer.svgText }}
             />
           );
         }
+
         return (
           // eslint-disable-next-line @next/next/no-img-element
           <img key={layer.id} className="layer" src={layer.rasterUrl} alt={layer.name} />

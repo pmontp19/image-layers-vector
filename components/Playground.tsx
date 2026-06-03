@@ -9,7 +9,7 @@ import {
   vectorizeLayer,
   fetchSvgText,
 } from "@/lib/workflow";
-import { downloadAllSvgs } from "@/lib/zip";
+import { downloadAllSvgs, downloadCombinedSvg } from "@/lib/zip";
 import { Dropzone } from "./Dropzone";
 import { LayerCanvas } from "./LayerCanvas";
 import { LayerPanel } from "./LayerPanel";
@@ -18,6 +18,20 @@ const GEN_STYLES: GenerateStyle[] = [
   { id: "vector_illustration", label: "Vector illustration (flat)" },
   { id: "digital_illustration", label: "Digital illustration" },
   { id: "realistic_image", label: "Realistic photo" },
+];
+
+// Distinct, vivid cut colors assigned to layers by index (Cricut-style).
+const LAYER_PALETTE = [
+  "#ef4444",
+  "#3b82f6",
+  "#22c55e",
+  "#f59e0b",
+  "#a855f7",
+  "#ec4899",
+  "#14b8a6",
+  "#eab308",
+  "#6366f1",
+  "#f97316",
 ];
 
 function errMsg(e: unknown): string {
@@ -45,6 +59,7 @@ export function Playground() {
   // results
   const [layers, setLayers] = useState<Layer[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("raster");
+  const [cricutMode, setCricutMode] = useState(true);
 
   // status
   const [stage, setStage] = useState<Stage>("idle");
@@ -57,6 +72,18 @@ export function Playground() {
 
   function updateLayer(id: string, patch: Partial<Layer>) {
     setLayers((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+  }
+
+  function reorderLayers(fromId: string, toId: string) {
+    setLayers((prev) => {
+      const from = prev.findIndex((l) => l.id === fromId);
+      const to = prev.findIndex((l) => l.id === toId);
+      if (from === -1 || to === -1 || from === to) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
   }
 
   function handleFile(file: File) {
@@ -149,6 +176,7 @@ export function Playground() {
         height: img.height ?? 0,
         visible: true,
         status: "raster",
+        color: LAYER_PALETTE[i % LAYER_PALETTE.length],
       }));
       setLayers(newLayers);
       setViewMode("raster");
@@ -330,6 +358,54 @@ export function Playground() {
 
           <div className={`status${error ? " err" : ""}`}>{error ?? status}</div>
           {logs.length > 0 ? <div className="logbox">{logs.join("\n")}</div> : null}
+
+          {layers.length > 0 ? (
+            <div className="section" style={{ marginTop: 14 }}>
+              <h2>Export</h2>
+              <label
+                className="row"
+                style={{ gap: 8, fontSize: 13, color: "var(--text)", marginBottom: 10 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={cricutMode}
+                  onChange={(e) => setCricutMode(e.target.checked)}
+                />
+                Cricut-ready (clean + 1 color/layer)
+              </label>
+              <button
+                className="btn block"
+                style={{ marginBottom: 8 }}
+                disabled={busy}
+                onClick={() =>
+                  downloadCombinedSvg(layers, {
+                    cricut: cricutMode,
+                    monochrome: cricutMode,
+                  })
+                }
+                title="One SVG, one named group per layer"
+              >
+                ⬇ Combined SVG
+              </button>
+              <button
+                className="btn block ghost"
+                disabled={busy}
+                onClick={() =>
+                  downloadAllSvgs(layers, {
+                    cricut: cricutMode,
+                    monochrome: cricutMode,
+                  })
+                }
+                title="ZIP with per-layer SVG + PNG and a combined.svg"
+              >
+                ⬇ ZIP (SVG + PNG)
+              </button>
+              <p className="hint" style={{ marginTop: 10 }}>
+                Import the combined SVG into Cricut Design Space — each layer is a
+                separate, recolorable cut path.
+              </p>
+            </div>
+          ) : null}
         </aside>
 
         {/* ---------------- CENTER: canvas ---------------- */}
@@ -349,19 +425,15 @@ export function Playground() {
               >
                 Vector
               </button>
+              <button
+                className={viewMode === "color" ? "active" : ""}
+                onClick={() => setViewMode("color")}
+                title="Cricut-style preview: one solid color per layer"
+              >
+                Color
+              </button>
             </div>
-            <div className="row" style={{ gap: 8 }}>
-              <span className="chip">{stageLabels[stage]}</span>
-              {layers.length > 0 ? (
-                <button
-                  className="btn small"
-                  disabled={busy}
-                  onClick={() => downloadAllSvgs(layers)}
-                >
-                  ⬇ Export ZIP
-                </button>
-              ) : null}
-            </div>
+            <span className="chip">{stageLabels[stage]}</span>
           </div>
 
           <LayerCanvas layers={layers} viewMode={viewMode} sourcePreview={localPreview} />
@@ -376,6 +448,8 @@ export function Playground() {
               updateLayer(id, { visible: !layers.find((l) => l.id === id)?.visible })
             }
             onVectorizeOne={vectorizeOne}
+            onReorder={reorderLayers}
+            onRecolor={(id, color) => updateLayer(id, { color })}
           />
         </aside>
       </div>
